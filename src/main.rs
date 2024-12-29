@@ -19,7 +19,6 @@ use esp_idf_svc::hal::{
     gpio::{self, PinDriver},
     peripherals,
     spi::{self, config::DriverConfig, SpiDeviceDriver, SpiDriver},
-    task::thread::ThreadSpawnConfiguration,
 };
 
 use max31855_rs::Max31855;
@@ -40,8 +39,6 @@ fn main() {
     esp_idf_svc::log::EspLogger::initialize_default();
 
     log::info!("Hello from esp32");
-
-    ThreadSpawnConfiguration::default().set().unwrap();
 
     let peripherals = peripherals::Peripherals::take().unwrap();
 
@@ -68,6 +65,7 @@ fn main() {
 
     thread::Builder::new()
         .name("display".to_string())
+        .stack_size(8192)
         .spawn(|| {
             let display_res = display(spi0, busy, dc, rst);
             match display_res {
@@ -79,6 +77,7 @@ fn main() {
 
     thread::Builder::new()
         .name("sensor".to_string())
+        .stack_size(8192)
         .spawn(|| {
             let sensor_res = sensor(spi1);
             match sensor_res {
@@ -115,13 +114,12 @@ fn display<'a>(
 
         let temp = TEMP.load(Ordering::Relaxed) as f32 / 100_f32;
 
+        log::info!("Temp: {}", temp);
+
         write_text(&mut display, format!("{}", temp).as_str(), 10, 30).unwrap();
 
         epd.update_and_display_new_frame(&mut spi0, &display.buffer(), &mut delay)
             .unwrap();
-
-        // Set the EPD to sleep
-        epd.sleep(&mut spi0, &mut delay).unwrap();
     }
 }
 
@@ -135,9 +133,11 @@ fn sensor<'a>(spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>) -> Result<(), &'a s
 
         let data = max.read().unwrap();
         let thermo_c = data.thermo_temperature();
-        TEMP.store((thermo_c * 100_f32) as i32, Ordering::Relaxed);
+        let thermo_i = (thermo_c * 100_f32) as i32;
 
-        log::info!("Thermocouple temperature: {}°C", thermo_c);
+        TEMP.store(thermo_i, Ordering::Relaxed);
+
+        log::info!("Thermo: {}°C", thermo_c);
     }
 }
 
