@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "aaron-bond.better-comments",
+    "tamasfe.even-better-toml",
+    "github.vscode-github-actions",
+    "rust-lang.rust-analyzer",
+    "wokwi.wokwi-vscode",
+    "ms-vscode.cpptools"
+  ]
+}

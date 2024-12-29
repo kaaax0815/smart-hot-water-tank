@@ -1,0 +1,11 @@
+{
+  "files.eol": "\n",
+  "editor.tabSize": 4,
+  "editor.useTabStops": false,
+  "files.autoSave": "onFocusChange",
+  "rust-analyzer.check.command": "clippy",
+  "editor.formatOnSave": true,
+  "[json]": {
+    "editor.formatOnSave": false
+  }
+}

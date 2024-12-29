@@ -28,7 +28,7 @@ const HEIGHT: u32 = 128;
 #[allow(dead_code)]
 const WIDTH: u32 = 296;
 
-const TEMP: AtomicI32 = AtomicI32::new(-25000);
+static TEMP: AtomicI32 = AtomicI32::new(-25000);
 
 fn main() {
     // It is necessary to call this function once. Otherwise some patches to the runtime
@@ -104,7 +104,7 @@ fn display<'a>(
     let mut display = Display2in9::default();
     display.set_rotation(DisplayRotation::Rotate90);
 
-    epd.update_old_frame(&mut spi0, &display.buffer(), &mut delay)
+    epd.update_old_frame(&mut spi0, display.buffer(), &mut delay)
         .unwrap();
 
     loop {
@@ -114,11 +114,9 @@ fn display<'a>(
 
         let temp = TEMP.load(Ordering::SeqCst) as f32 / 100_f32;
 
-        log::info!("Temp: {}", temp);
-
         write_text(&mut display, format!("{}", temp).as_str(), 10, 30).unwrap();
 
-        epd.update_and_display_new_frame(&mut spi0, &display.buffer(), &mut delay)
+        epd.update_and_display_new_frame(&mut spi0, display.buffer(), &mut delay)
             .unwrap();
     }
 }
@@ -153,5 +151,5 @@ fn write_text<'a>(
         .draw(display)
         .unwrap();
 
-    return Ok(());
+    Ok(())
 }
