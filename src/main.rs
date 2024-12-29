@@ -19,7 +19,7 @@ use esp_idf_svc::hal::{
     gpio::{self, PinDriver},
     peripherals,
     spi::{self, config::DriverConfig, SpiDeviceDriver, SpiDriver},
-    task::{block_on, thread::ThreadSpawnConfiguration},
+    task::thread::ThreadSpawnConfiguration,
 };
 
 use max31855_rs::Max31855;
@@ -69,7 +69,7 @@ fn main() {
     thread::Builder::new()
         .name("display".to_string())
         .spawn(|| {
-            let display_res = block_on(display(spi0, busy, dc, rst));
+            let display_res = display(spi0, busy, dc, rst);
             match display_res {
                 Ok(_) => log::info!("Display thread exited successfully"),
                 Err(_) => log::error!("Display thread exited with an error"),
@@ -80,7 +80,7 @@ fn main() {
     thread::Builder::new()
         .name("sensor".to_string())
         .spawn(|| {
-            let sensor_res = block_on(sensor(spi1));
+            let sensor_res = sensor(spi1);
             match sensor_res {
                 Ok(_) => log::info!("Sensor thread exited successfully"),
                 Err(_) => log::error!("Sensor thread exited with an error"),
@@ -93,7 +93,7 @@ fn main() {
     }
 }
 
-async fn display<'a>(
+fn display<'a>(
     mut spi0: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>,
     busy: PinDriver<'a, gpio::Gpio22, gpio::Input>,
     dc: PinDriver<'a, gpio::Gpio11, gpio::Output>,
@@ -125,7 +125,7 @@ async fn display<'a>(
     }
 }
 
-async fn sensor<'a>(spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>) -> Result<(), &'a str> {
+fn sensor<'a>(spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>) -> Result<(), &'a str> {
     let mut max = Max31855::new(spi1);
 
     let delay = Delay::new_default();
