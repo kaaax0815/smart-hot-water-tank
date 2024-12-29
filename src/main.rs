@@ -112,7 +112,7 @@ fn display<'a>(
 
         display.clear(Color::White).unwrap();
 
-        let temp = TEMP.load(Ordering::Relaxed) as f32 / 100_f32;
+        let temp = TEMP.load(Ordering::SeqCst) as f32 / 100_f32;
 
         log::info!("Temp: {}", temp);
 
@@ -135,7 +135,7 @@ fn sensor<'a>(spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>) -> Result<(), &'a s
         let thermo_c = data.thermo_temperature();
         let thermo_i = (thermo_c * 100_f32) as i32;
 
-        TEMP.store(thermo_i, Ordering::Relaxed);
+        TEMP.store(thermo_i, Ordering::SeqCst);
 
         log::info!("Thermo: {}°C", thermo_c);
     }
