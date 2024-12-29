@@ -20,7 +20,6 @@ use esp_idf_svc::hal::{
     peripherals,
     spi::{self, config::DriverConfig, SpiDeviceDriver, SpiDriver},
     task::{block_on, thread::ThreadSpawnConfiguration},
-    timer::{config, TimerDriver},
 };
 
 use max31855_rs::Max31855;
@@ -40,30 +39,23 @@ fn main() {
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    // correctly logged
-    log::info!("Hello, world!");
+    log::info!("Hello from esp32");
 
     ThreadSpawnConfiguration::default().set().unwrap();
 
     let peripherals = peripherals::Peripherals::take().unwrap();
 
-    // correctly logged
-    log::info!("Hello, world!");
-
     let spi = peripherals.spi2;
 
-    let rst = PinDriver::output(peripherals.pins.gpio5).unwrap();
-    let dc = PinDriver::output(peripherals.pins.gpio4).unwrap();
+    let rst = PinDriver::output(peripherals.pins.gpio10).unwrap();
+    let dc = PinDriver::output(peripherals.pins.gpio11).unwrap();
     let busy = PinDriver::input(peripherals.pins.gpio22).unwrap();
-
-    // not logged
-    log::info!("Hello, world!");
 
     let sclk = peripherals.pins.gpio6;
     let mosi = peripherals.pins.gpio7;
     let miso = peripherals.pins.gpio2;
-    let cs0 = peripherals.pins.gpio16;
-    let cs1 = peripherals.pins.gpio17;
+    let cs0 = peripherals.pins.gpio19;
+    let cs1 = peripherals.pins.gpio18;
 
     let config = spi::config::Config::default();
 
@@ -74,16 +66,10 @@ fn main() {
     let spi0 = SpiDeviceDriver::new(spi_driver.clone(), Some(cs0), &config).unwrap();
     let spi1 = SpiDeviceDriver::new(spi_driver.clone(), Some(cs1), &config).unwrap();
 
-    let timer0 = TimerDriver::new(peripherals.timer00, &config::Config::default()).unwrap();
-    let timer1 = TimerDriver::new(peripherals.timer10, &config::Config::default()).unwrap();
-
-    // not logged
-    log::info!("Hello, world!");
-
     thread::Builder::new()
         .name("display".to_string())
         .spawn(|| {
-            let display_res = block_on(display(spi0, busy, dc, rst, timer0));
+            let display_res = block_on(display(spi0, busy, dc, rst));
             match display_res {
                 Ok(_) => log::info!("Display thread exited successfully"),
                 Err(_) => log::error!("Display thread exited with an error"),
@@ -94,7 +80,7 @@ fn main() {
     thread::Builder::new()
         .name("sensor".to_string())
         .spawn(|| {
-            let sensor_res = block_on(sensor(spi1, timer1));
+            let sensor_res = block_on(sensor(spi1));
             match sensor_res {
                 Ok(_) => log::info!("Sensor thread exited successfully"),
                 Err(_) => log::error!("Sensor thread exited with an error"),
@@ -110,9 +96,8 @@ fn main() {
 async fn display<'a>(
     mut spi0: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>,
     busy: PinDriver<'a, gpio::Gpio22, gpio::Input>,
-    dc: PinDriver<'a, gpio::Gpio4, gpio::Output>,
-    rst: PinDriver<'a, gpio::Gpio5, gpio::Output>,
-    mut timer: TimerDriver<'a>,
+    dc: PinDriver<'a, gpio::Gpio11, gpio::Output>,
+    rst: PinDriver<'a, gpio::Gpio10, gpio::Output>,
 ) -> Result<(), &'a str> {
     let mut delay = Delay::new_default();
 
@@ -120,8 +105,11 @@ async fn display<'a>(
     let mut display = Display2in9::default();
     display.set_rotation(DisplayRotation::Rotate90);
 
+    epd.update_old_frame(&mut spi0, &display.buffer(), &mut delay)
+        .unwrap();
+
     loop {
-        timer.delay(1000000).await.unwrap();
+        delay.delay_ms(1000);
 
         display.clear(Color::White).unwrap();
 
@@ -129,27 +117,27 @@ async fn display<'a>(
 
         write_text(&mut display, format!("{}", temp).as_str(), 10, 30).unwrap();
 
-        epd.update_frame(&mut spi0, &display.buffer(), &mut delay)
+        epd.update_and_display_new_frame(&mut spi0, &display.buffer(), &mut delay)
             .unwrap();
-        epd.display_frame(&mut spi0, &mut delay).unwrap();
 
         // Set the EPD to sleep
         epd.sleep(&mut spi0, &mut delay).unwrap();
     }
 }
 
-async fn sensor<'a>(
-    spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>,
-    mut timer: TimerDriver<'a>,
-) -> Result<(), &'a str> {
+async fn sensor<'a>(spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>) -> Result<(), &'a str> {
     let mut max = Max31855::new(spi1);
 
+    let delay = Delay::new_default();
+
     loop {
-        timer.delay(1000000).await.unwrap();
+        delay.delay_ms(1000);
 
         let data = max.read().unwrap();
         let thermo_c = data.thermo_temperature();
         TEMP.store((thermo_c * 100_f32) as i32, Ordering::Relaxed);
+
+        log::info!("Thermocouple temperature: {}°C", thermo_c);
     }
 }
 

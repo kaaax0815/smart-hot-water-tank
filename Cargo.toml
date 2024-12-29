@@ -32,3 +32,9 @@ max31855-rs = "0.1.0"
 [build-dependencies]
 embuild = "0.32.0"
 cc = "=1.1.30" # Version "1.1.30" necessary until a new version of `esp-idf-sys` is released
+
+[patch.crates-io]
+esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys", branch = "master" }
+esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc", branch = "master" }
+esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal", branch = "master" }
+embuild = { git = "https://github.com/esp-rs/embuild", branch = "master" }
