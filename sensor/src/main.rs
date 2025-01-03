@@ -198,7 +198,7 @@ fn sensor<'a>(spi1: SpiDeviceDriver<'a, Arc<SpiDriver<'a>>>) -> anyhow::Result<(
     }
 }
 
-fn network<'a>(mut wifi: BlockingWifi<EspWifi<'a>>) -> anyhow::Result<()> {
+fn network(mut wifi: BlockingWifi<EspWifi<'_>>) -> anyhow::Result<()> {
     let delay = Delay::new_default();
 
     // TODO: gracefully handle timeouts or disconnects
@@ -239,7 +239,7 @@ fn write_temp(display: &mut Display2in9, int: i32, frac: i32) -> anyhow::Result<
     Ok(())
 }
 
-fn connect_wifi<'a>(wifi: &mut BlockingWifi<EspWifi<'a>>) -> anyhow::Result<()> {
+fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'_>>) -> anyhow::Result<()> {
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: SSID.try_into().unwrap(),
         bssid: None,
