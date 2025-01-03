@@ -8,9 +8,7 @@
       "id": "esp",
       "top": -4.31,
       "left": -5.48,
-      "attrs": {
-        "flashSize": "16"
-      }
+      "attrs": { "flashSize": "16" }
     },
     {
       "type": "board-epaper-2in9",
@@ -23,12 +21,7 @@
   "connections": [
     ["esp:TX", "$serialMonitor:RX", "", []],
     ["esp:RX", "$serialMonitor:TX", "", []],
-    [
-      "esp:GND.4",
-      "epd1:GND",
-      "#8f4814",
-      ["v-57.6", "h-154.7", "v316.8", "h281.85", "v-153.53"]
-    ],
+    ["epd1:GND", "esp:GND.4", "#8f4814", ["v-0.07", "h-115.2", "v-105.6"]],
     [
       "epd1:VCC",
       "esp:3V3",
@@ -38,23 +31,20 @@
     ["epd1:CLK", "esp:6", "gold", ["h-38.4", "v163.13", "h-220.8", "v-201.6"]],
     [
       "epd1:DC",
-      "esp:4",
+      "esp:11",
       "green",
       ["h-67.2", "v163.2", "h-211.2", "v-259.2", "h28.8", "v57.6"]
     ],
     [
       "epd1:RST",
-      "esp:5",
+      "esp:10",
       "white",
       ["h-76.8", "v163.2", "h-211.2", "v-259.2", "h57.6"]
     ],
     ["epd1:BUSY", "esp:22", "purple", ["h-86.4", "v76.8", "h-19.2", "v-62.3"]],
-    ["esp:TX", "epd1:CS", "orange", ["h18.1", "v220.8", "h76.8", "v-163.2"]],
+    ["epd1:CS", "esp:19", "orange", ["h-57.6", "v163.2", "h-67.2", "v-153.6"]],
     ["epd1:DIN", "esp:7", "blue", ["h-240", "v-38.47"]]
   ],
-  "serialMonitor": {
-    "display": "terminal",
-    "convertEol": true
-  },
+  "serialMonitor": { "display": "terminal", "convertEol": true },
   "dependencies": {}
 }

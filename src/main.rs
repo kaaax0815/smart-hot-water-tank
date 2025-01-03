@@ -19,6 +19,7 @@ use esp_idf_svc::{
         spi::{self, config::DriverConfig, SpiDeviceDriver, SpiDriver},
     },
     nvs::EspDefaultNvsPartition,
+    sntp::EspSntp,
     wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi},
 };
 
@@ -34,7 +35,7 @@ const PASSWORD: &str = env!("WIFI_PASS");
 
 static TEMP: AtomicI32 = AtomicI32::new(-25000);
 
-static IP: LazyLock<Arc<RwLock<String>>> =
+static WIFI_STATUS: LazyLock<Arc<RwLock<String>>> =
     LazyLock::new(|| Arc::new(RwLock::new("Not available".to_string())));
 
 // TODO: avoid unwrap, handle gracefully
@@ -153,7 +154,7 @@ fn display<'a>(
 
         // ip
         {
-            let ip = IP.try_read();
+            let ip = WIFI_STATUS.try_read();
             match ip {
                 Ok(ip) => {
                     write_ip(&mut display, ip.to_string()).unwrap();
@@ -202,15 +203,18 @@ fn network<'a>(mut wifi: BlockingWifi<EspWifi<'a>>) -> anyhow::Result<()> {
     // TODO: gracefully handle timeouts or disconnects
     connect_wifi(&mut wifi)?;
 
+    let _sntp = EspSntp::new_default()?;
+    log::info!("network: SNTP initialized");
+
     let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
 
-    log::info!("network : Wifi connected with IP: {:?}", ip_info);
+    log::info!("network: Wifi connected with IP: {:?}", ip_info);
 
     loop {
         delay.delay_ms(1000);
-        let mut write_lock = IP.write().unwrap();
-        let ip = wifi.wifi().sta_netif().get_ip_info()?;
-        *write_lock = ip.ip.to_string();
+        let mut write_lock = WIFI_STATUS.write().unwrap();
+        let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
+        *write_lock = ip_info.ip.to_string();
         drop(write_lock);
     }
 }
@@ -259,11 +263,24 @@ fn connect_wifi<'a>(wifi: &mut BlockingWifi<EspWifi<'a>>) -> anyhow::Result<()> 
 }
 
 fn write_ip(display: &mut Display2in9, ip: String) -> anyhow::Result<()> {
-    let font = FontRenderer::new::<fonts::u8g2_font_logisoso16_tr>();
+    let font = FontRenderer::new::<fonts::u8g2_font_profont17_tr>();
+    let icon = FontRenderer::new::<fonts::u8g2_font_streamline_interface_essential_wifi_t>();
+
+    let icon_box = icon
+        .render_aligned(
+            '\u{0030}',
+            Point::new(0, 128),
+            VerticalPosition::Bottom,
+            HorizontalAlignment::Left,
+            u8g2_fonts::types::FontColor::Transparent(Color::Black),
+            display,
+        )
+        .unwrap()
+        .unwrap();
 
     font.render_aligned(
         &*ip,
-        Point::new(0, 128),
+        icon_box.bottom_right().unwrap() + Point::new(5, 0),
         VerticalPosition::Bottom,
         HorizontalAlignment::Left,
         u8g2_fonts::types::FontColor::Transparent(Color::Black),
