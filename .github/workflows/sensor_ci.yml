@@ -11,6 +11,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WIFI_SSID: SSID
+  WIFI_PASS: PASSWORD
 
 defaults:
   run:

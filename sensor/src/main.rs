@@ -39,6 +39,7 @@ static WIFI_STATUS: LazyLock<Arc<RwLock<String>>> =
     LazyLock::new(|| Arc::new(RwLock::new("Not available".to_string())));
 
 // TODO: avoid unwrap, handle gracefully
+// TODO: int temp https://github.com/esp-rs/esp-idf-hal/blob/master/examples/temperature_sensor.rs
 
 fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
