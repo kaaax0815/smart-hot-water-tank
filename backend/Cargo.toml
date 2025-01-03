@@ -1,0 +1,7 @@
+[package]
+name = "smart-hot-water-tank"
+version = "0.1.0"
+authors = ["Bernd Storath <999999bst@gmail.com>"]
+edition = "2021"
+
+[dependencies]

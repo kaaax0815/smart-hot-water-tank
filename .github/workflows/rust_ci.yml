@@ -4,12 +4,18 @@ on:
   push:
     paths-ignore:
       - "**/README.md"
+    paths:
+      - "sensor/**"
   pull_request:
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+defaults:
+  run:
+    working-directory: ./sensor
 
 jobs:
   rust-checks:
