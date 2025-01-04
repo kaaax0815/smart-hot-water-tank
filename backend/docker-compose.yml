@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=http://db:8086
+      - DATABASE_USER=root
+      - DATABASE_PASS=rootroot
+      - RUST_LOG=info
+
+  db:
+    image: influxdb:2.7.11-alpine
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=root
+      - DOCKER_INFLUXDB_INIT_PASSWORD=rootroot
+      - DOCKER_INFLUXDB_INIT_ORG=org0
+      - DOCKER_INFLUXDB_INIT_BUCKET=db0
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=rootroot
+    volumes:
+      - ./data/db:/var/lib/influxdb2
