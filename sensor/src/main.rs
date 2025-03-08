@@ -1,10 +1,12 @@
 use std::{
     sync::{
-        atomic::{AtomicI32, Ordering},
+        atomic::{AtomicBool, AtomicI32, Ordering},
         Arc, LazyLock, RwLock,
     },
     thread,
 };
+
+use embedded_svc::http::client::Client as HttpClient;
 
 use embedded_graphics::prelude::*;
 
@@ -18,6 +20,8 @@ use esp_idf_svc::{
         peripherals,
         spi::{self, config::DriverConfig, SpiDeviceDriver, SpiDriver},
     },
+    http::client::EspHttpConnection,
+    io::Write,
     nvs::EspDefaultNvsPartition,
     sntp::EspSntp,
     wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi},
@@ -34,6 +38,7 @@ const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 
 static TEMP: AtomicI32 = AtomicI32::new(-25000);
+static SENDING: AtomicBool = AtomicBool::new(false);
 
 static WIFI_STATUS: LazyLock<Arc<RwLock<String>>> =
     LazyLock::new(|| Arc::new(RwLock::new("Not available".to_string())));
@@ -156,9 +161,10 @@ fn display<'a>(
         // ip
         {
             let ip = WIFI_STATUS.try_read();
+            let sending: bool = SENDING.load(Ordering::SeqCst);
             match ip {
                 Ok(ip) => {
-                    write_ip(&mut display, ip.to_string()).unwrap();
+                    write_ip(&mut display, ip.to_string(), sending).unwrap();
                 }
                 Err(_) => {
                     log::error!("display: IP: Lock not available");
@@ -202,22 +208,65 @@ fn network(mut wifi: BlockingWifi<EspWifi<'_>>) -> anyhow::Result<()> {
     let delay = Delay::new_default();
 
     // TODO: gracefully handle timeouts or disconnects
-    connect_wifi(&mut wifi)?;
+    loop {
+        let result = connect_wifi(&mut wifi);
+        match result {
+            Ok(_) => {
+                break;
+            }
+            Err(e) => {
+                log::error!("network: WiFi connection failed. {:?}. Retrying...", e);
+            }
+        }
+        delay.delay_ms(1000);
+    }
+
+    let mut client = HttpClient::wrap(EspHttpConnection::new(&Default::default())?);
 
     let _sntp = EspSntp::new_default()?;
     log::info!("network: SNTP initialized");
 
     let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
 
-    log::info!("network: Wifi connected with IP: {:?}", ip_info);
+    log::info!("network: WiFi connected with IP: {:?}", ip_info);
 
     loop {
-        delay.delay_ms(1000);
-        let mut write_lock = WIFI_STATUS.write().unwrap();
-        let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
-        *write_lock = ip_info.ip.to_string();
-        drop(write_lock);
+        delay.delay_ms(10_000);
+
+        if wifi.is_connected()? {
+            let mut write_lock = WIFI_STATUS.write().unwrap();
+            let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
+            *write_lock = ip_info.ip.to_string();
+            drop(write_lock);
+
+            let temp = TEMP.load(Ordering::SeqCst);
+            SENDING.store(true, Ordering::SeqCst);
+            upload_temp(&mut client, temp)?;
+            SENDING.store(false, Ordering::SeqCst);
+        } else {
+            return network(wifi);
+        }
     }
+}
+
+fn upload_temp(client: &mut HttpClient<EspHttpConnection>, temp: i32) -> anyhow::Result<()> {
+    let uri = "";
+
+    let _payload = format!("{{\"temp\": {}}}", temp);
+    let payload = _payload.as_bytes();
+    let content_length_header = format!("{}", payload.len());
+
+    let headers = [
+        ("content-type", "application/json"),
+        ("content-length", &*content_length_header),
+    ];
+
+    let mut request = client.post(uri, &headers)?;
+    let response = request.write_all(payload)?;
+
+    log::info!("send_temp: Response: {:?}", response);
+
+    Ok(())
 }
 
 fn write_temp(display: &mut Display2in9, int: i32, frac: i32) -> anyhow::Result<()> {
@@ -240,7 +289,7 @@ fn write_temp(display: &mut Display2in9, int: i32, frac: i32) -> anyhow::Result<
 }
 
 fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'_>>) -> anyhow::Result<()> {
-    let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
+    let wifi_configuration = Configuration::Client(ClientConfiguration {
         ssid: SSID.try_into().unwrap(),
         bssid: None,
         auth_method: AuthMethod::WPA2WPA3Personal,
@@ -252,22 +301,22 @@ fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'_>>) -> anyhow::Result<()> {
     wifi.set_configuration(&wifi_configuration)?;
 
     wifi.start()?;
-    log::info!("wifi: Wifi started");
+    log::info!("wifi: WiFi started");
 
     wifi.connect()?;
-    log::info!("wifi: Wifi connected");
+    log::info!("wifi: WiFi connected");
 
     wifi.wait_netif_up()?;
-    log::info!("wifi: Wifi netif up");
+    log::info!("wifi: WiFi netif up");
 
     Ok(())
 }
 
-fn write_ip(display: &mut Display2in9, ip: String) -> anyhow::Result<()> {
+fn write_ip(display: &mut Display2in9, ip: String, sending: bool) -> anyhow::Result<()> {
     let font = FontRenderer::new::<fonts::u8g2_font_profont17_tr>();
-    let icon = FontRenderer::new::<fonts::u8g2_font_streamline_interface_essential_wifi_t>();
+    let wifi_icon = FontRenderer::new::<fonts::u8g2_font_streamline_interface_essential_wifi_t>();
 
-    let icon_box = icon
+    let icon_box = wifi_icon
         .render_aligned(
             '\u{0030}',
             Point::new(0, 128),
@@ -279,15 +328,33 @@ fn write_ip(display: &mut Display2in9, ip: String) -> anyhow::Result<()> {
         .unwrap()
         .unwrap();
 
-    font.render_aligned(
-        &*ip,
-        icon_box.bottom_right().unwrap() + Point::new(5, 0),
-        VerticalPosition::Bottom,
-        HorizontalAlignment::Left,
-        u8g2_fonts::types::FontColor::Transparent(Color::Black),
-        display,
-    )
-    .unwrap();
+    let font_box = font
+        .render_aligned(
+            &*ip,
+            icon_box.bottom_right().unwrap() + Point::new(5, 0),
+            VerticalPosition::Bottom,
+            HorizontalAlignment::Left,
+            u8g2_fonts::types::FontColor::Transparent(Color::Black),
+            display,
+        )
+        .unwrap()
+        .unwrap();
+
+    if sending {
+        let loading_icon =
+            FontRenderer::new::<fonts::u8g2_font_streamline_interface_essential_loading_t>();
+
+        loading_icon
+            .render_aligned(
+                '\u{0030}',
+                font_box.bottom_right().unwrap() + Point::new(5, 0),
+                VerticalPosition::Bottom,
+                HorizontalAlignment::Left,
+                u8g2_fonts::types::FontColor::Transparent(Color::Black),
+                display,
+            )
+            .unwrap();
+    }
 
     Ok(())
 }

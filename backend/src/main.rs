@@ -52,9 +52,13 @@ async fn create_entry(
 ) -> impl IntoResponse {
     tracing::info!("creating entry: {:?}", payload);
 
+    // TODO: transform temp
+
+    let temp = payload.temp as f32 / 100_f32;
+
     let entry = TempReading {
         time: Utc::now(),
-        temp: payload.temp,
+        temp,
     }
     .into_query("temp");
 
@@ -80,7 +84,7 @@ struct CreateEntry {
 #[derive(InfluxDbWriteable)]
 struct TempReading {
     time: DateTime<Utc>,
-    temp: i32,
+    temp: f32,
 }
 
 #[derive(Serialize, Debug)]

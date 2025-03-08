@@ -24,12 +24,13 @@ experimental = ["esp-idf-svc/experimental"]
 
 [dependencies]
 log = "0.4"
-esp-idf-svc = { version = "0.50", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
+esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 epd-waveshare = "0.6.0"
 embedded-graphics = { version = "0.8.1", features = ["defmt"] }
 max31855-rs = "0.1.0"
 u8g2-fonts = "0.5.1"
 anyhow = "1.0.95"
+embedded-svc = "0.28.1"
 
 [build-dependencies]
 embuild = "0.33.0"
