@@ -262,9 +262,11 @@ fn upload_temp(client: &mut HttpClient<EspHttpConnection>, temp: i32) -> anyhow:
     ];
 
     let mut request = client.post(uri, &headers)?;
-    let response = request.write_all(payload)?;
+    request.write_all(payload)?;
+    request.flush()?;
+    let response = request.submit()?;
 
-    log::info!("send_temp: Response: {:?}", response);
+    log::info!("network: Response: {:?}", response.status());
 
     Ok(())
 }
