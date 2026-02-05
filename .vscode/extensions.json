@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "aaron-bond.better-comments",
+    "redhat.vscode-yaml",
+    "golang.go",
+    "github.vscode-github-actions",
+    "esbenp.prettier-vscode",
+    "Vue.volar"
+  ]
+}

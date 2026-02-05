@@ -1,0 +1,6 @@
+CREATE TABLE logins (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    api_key CHAR(128) NOT NULL UNIQUE,
+    used_at TIMESTAMPTZ
+);

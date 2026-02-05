@@ -1,0 +1,7 @@
+CREATE TABLE sensors (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    unit VARCHAR(50) NOT NULL,
+    api_key CHAR(128) NOT NULL UNIQUE
+);

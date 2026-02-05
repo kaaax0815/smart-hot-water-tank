@@ -1,0 +1,199 @@
+esphome:
+  name: hotwater
+  on_boot:
+    - priority: -300
+      then:
+        - script.execute: boot_script
+        # - script.execute: prod_loop
+        - script.execute: dev_loop
+
+esp32:
+  board: esp32-c6-devkitc-1
+  framework:
+    type: esp-idf
+    advanced:
+      enable_lwip_mdns_queries: false
+
+substitutions:
+  backend_endpoint: !secret backend_endpoint
+  backend_key: !secret backend_key
+
+# Enable logging
+logger:
+#  baud_rate: 0
+#  level: NONE
+
+font:
+  - file: "fonts/Montserrat-Regular.ttf"
+    id: regular
+    size: 20
+  - file: "fonts/Montserrat-Black.ttf"
+    id: black
+    size: 40
+  - file: "fonts/Lucide.ttf"
+    id: lucide
+    size: 20
+    glyphs:
+      - "\U0000E1AE" # wifi
+      - "\U0000E0A9" # cpu
+      - "\U0000E140" # power
+
+wifi:
+  id: wifi_id
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s
+  # hopefully save some power
+  fast_connect: true
+  power_save_mode: LIGHT
+  post_connect_roaming: false
+  manual_ip:
+    static_ip: 192.168.178.254
+    gateway: 192.168.178.1
+    subnet: 255.255.255.0
+    dns1: 192.168.178.1
+
+http_request:
+  id: http_request_id
+
+deep_sleep:
+  id: deep_sleep_id
+  sleep_duration: 10min
+
+time:
+  - platform: sntp
+    id: time_id
+    timezone: Europe/Berlin
+    update_interval: 15min
+
+globals:
+  - id: boot_count
+    type: int
+    restore_value: true
+    initial_value: "0"
+
+# https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/user_guide.html#hardware-reference
+# https://docs.espressif.com/projects/esp-idf/en/stable/esp32c6/api-reference/peripherals/spi_master.html
+spi:
+  mosi_pin: GPIO7
+  miso_pin: GPIO2
+  clk_pin: GPIO6
+
+sensor:
+  - platform: max31855
+    id: temp_id
+    # FSPICS2
+    cs_pin: GPIO18
+    update_interval: never
+  - platform: internal_temperature
+    id: internal_temp_id
+    update_interval: never
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: ip_address_id
+
+display:
+  - platform: waveshare_epaper
+    id: display_id
+    # FSPICS3
+    cs_pin: GPIO19
+    dc_pin: GPIO11
+    busy_pin: GPIO22
+    reset_pin: GPIO10
+    # 296x128
+    model: 2.90inv2-r2
+    rotation: 90°
+    update_interval: never
+    full_update_every: 30
+    lambda: |-
+      // wifi status
+      it.print(0, 108 , id(lucide), "\U0000E1AE");
+      if (id(wifi_id).is_connected()) {
+        it.print(25, 108, id(regular), id(ip_address_id).state.c_str());
+      } else {
+        it.print(25, 108, id(regular), "not connected");
+      }
+
+      // boot count
+      it.print(269, 108, id(lucide), TextAlign::TOP_RIGHT, "\U0000E140");
+      it.printf(296, 108, id(regular), TextAlign::TOP_RIGHT, "%d", id(boot_count));
+
+      // hot water temp
+      // TODO: add wait_until to main_loop?
+      if (id(temp_id).has_state()) {
+        it.printf(250, 40, id(black), TextAlign::TOP_RIGHT, "%.2f °C", id(temp_id).state);
+      } else {
+        it.print(250, 40, id(black), TextAlign::TOP_RIGHT, "--.-- °C");
+      }
+
+      // internal temp
+      it.print(0, 0, id(lucide), TextAlign::TOP_LEFT, "\U0000E0A9");
+      it.printf(25, 0, id(regular), TextAlign::TOP_LEFT, "%.2f °C", id(internal_temp_id).state);
+
+      it.strftime(296, 0, id(regular), TextAlign::TOP_RIGHT, "%d.%m.%Y %H:%M", id(time_id).now());
+
+# TODO: use ntp to increase deep sleep at night or use json response from backend to decide how long to sleep
+
+script:
+  # track boot count
+  - id: boot_script
+    then:
+      - lambda: |-
+          if (id(boot_count) >= 99) {
+            id(boot_count) = 0;
+          }
+          id(boot_count) += 1;
+          ESP_LOGD("boot_script", "Boot count: %d", id(boot_count));
+  - id: main_loop
+    mode: single
+    then:
+      # wait for wifi
+      - wait_until:
+          condition: wifi.connected
+          timeout: 15s
+      # TODO: only sync once a day
+      # update time
+      # - component.update: time_id
+      # read sensor
+      - component.update: temp_id
+      - component.update: internal_temp_id
+      - delay: 250ms
+      - component.update: temp_id
+      - delay: 250ms
+      # update display
+      - component.update: display_id
+      # Send data to backend
+      - if:
+          condition:
+            and:
+              - wifi.connected
+              - lambda: "return id(temp_id).has_state();"
+              - lambda: "return false;" # disable for now, backend not ready
+          then:
+            - http_request.post:
+                url: ${backend_endpoint}
+                request_headers:
+                  Content-Type: application/json
+                  Authorization: Bearer ${backend_key}
+                json: |-
+                  root["temp"] = id(temp_id).state;
+  - id: dev_loop
+    mode: single
+    then:
+      - while:
+          condition:
+            lambda: "return true;"
+          then:
+            - logger.log: "Dev loop iteration"
+            - script.execute: main_loop
+            - script.wait: main_loop
+            - delay: 5s
+  #- id: prod_loop
+  #  mode: single
+  #  then:
+  #    - script.execute: main_loop
+  #    - script.wait: main_loop
+  #    - deep_sleep.enter:
+  #        id: deep_sleep_id
